@@ -1,0 +1,829 @@
+---
+title: "East Asia Real Exchange Rate Cointegration Analysis"
+output: github_document
+date: "2026-01-19"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(warning = FALSE, message = FALSE)
+```
+
+## 0. Environment Setup
+
+### 0.1 Loading Packages for Time Series and Econometric Analysis
+
+```{r include=FALSE}
+# Loading Required Libraries and Dependencies
+library(writexl)
+library(tempdisagg)
+library(tsbox) 
+library(readxl)
+library(ggplot2)
+library(dplyr)
+library(knitr)
+library(urca)
+library(flextable)
+library(vars)
+library(officer)
+```
+
+### 0.2 Integration of Interpolated Estimates into Main Data Set
+
+```{r load-data, include=FALSE}
+# Convert Date columns and attach data sets for direct variable access
+interpolated_data <- read_excel("/Users/chingting/Desktop/research_revision copy/interpolated_data.xlsx") 
+data <- read_excel("/Users/chingting/Desktop/research_revision copy/data.xlsx", sheet = 2)
+interpolated_data$Date <- as.Date(interpolated_data$Date...9)
+data$Date <- as.Date(data$...1)
+
+attach(interpolated_data)
+attach(data)
+```
+
+```{r include=FALSE}
+# Mapping 
+interp_clean <- data.frame(
+  Date   = as.Date(Date), 
+  cn_gdp = cn_gdp_smooth,
+  cn_rir = cn_rir_smooth,
+  cn_fr  = cn_fr_smooth,
+  us_fr  = us_fr_smooth,
+  us_gdp = us_gdp_smooth,
+  hk_gdp = hk_gdp_smooth,
+  jp_gdp = jp_gdp_smooth
+)
+detach(interpolated_data)
+
+# Overwrite by Date
+cols_to_fix <- setdiff(names(interp_clean), "Date")
+idx <- match(data$Date, interp_clean$Date)
+
+for (col in cols_to_fix) {
+  data[[col]][!is.na(idx)] <- interp_clean[[col]][idx[!is.na(idx)]]
+}
+```
+
+### 0.3 Define the Functions
+
+1.  Function for creating ADF test summary tables
+
+```{r}
+get_adf_diagnostics <- function(var_name, trend_model, drift_model) {
+  
+  # --- STEP 1: TEST TREND SIGNIFICANCE (Phi 2) ---
+  trend_cvals <- trend_model@cval
+  trend_stats <- trend_model@teststat
+  
+  # Extract raw stats
+  phi2_stat <- trend_stats[1, "phi2"]
+  phi2_cv   <- trend_cvals["phi2", "5pct"]
+  tau3_stat <- trend_stats[1, "tau3"]
+  tau3_cv   <- trend_cvals["tau3", "5pct"]
+  
+  # Logic: If Phi2 < CV, trend is NOT significant -> "Drop Trend"
+  is_trend_significant <- phi2_stat > phi2_cv
+  decision <- ifelse(is_trend_significant, "Keep Trend", "Drop Trend")
+  
+  # --- STEP 2: BUILD ROWS ---
+  
+  if (is_trend_significant) {
+    # === CASE 1: KEEP TREND ===
+    
+    # Conclusion based on Trend Model
+    conclusion <- ifelse(tau3_stat > tau3_cv, "Non-Stationary", "Stationary")
+    
+    return(data.frame(
+      Variable   = var_name,
+      Model      = "Trend",
+      Phi        = round(phi2_stat, 3),
+      CV_Phi     = round(phi2_cv, 2),
+      Decision   = decision,
+      Tau        = round(tau3_stat, 3),
+      CV_Tau     = round(tau3_cv, 2),
+      Conclusion = conclusion,
+      stringsAsFactors = FALSE
+    ))
+    
+  } else {
+    # === CASE 2: DROP TREND ===
+    
+    # 1. Create the Trend Row (Grey)
+    row_trend <- data.frame(
+      Variable   = var_name,
+      Model      = "Trend",
+      Phi        = round(phi2_stat, 3),
+      CV_Phi     = round(phi2_cv, 2),   
+      Decision   = decision,
+      Tau        = round(tau3_stat, 3),
+      CV_Tau     = round(tau3_cv, 2),
+      Conclusion = "",                  # Rule: Leave conclusion blank
+      stringsAsFactors = FALSE
+    )
+    
+    # 2. Create the Drift Row (Standard)
+    drift_cvals <- drift_model@cval
+    drift_stats <- drift_model@teststat
+    tau2_stat   <- drift_stats[1, "tau2"]
+    tau2_cv     <- drift_cvals["tau2", "5pct"]
+    
+    drift_conclusion <- ifelse(tau2_stat > tau2_cv, "Non-Stationary", "Stationary")
+    
+    row_drift <- data.frame(
+      Variable   = var_name,
+      Model      = "Drift",
+      Phi        = "NA",                  # Drift model has no Phi
+      CV_Phi     = "NA",
+      Decision   = "",
+      Tau        = round(tau2_stat, 3),
+      CV_Tau     = round(tau2_cv, 2),
+      Conclusion = drift_conclusion,
+      stringsAsFactors = FALSE
+    )
+    
+    return(rbind(row_trend, row_drift))
+  }
+}
+
+style_adf_table <- function(df, caption_text) {
+  
+  # Define Greek Headers
+  header_phi <- "\u03d52"       
+  header_tau <- "\u03c4"        
+  header_cv_phi <- paste0("CV", "\u03d5", "(0.05)")
+  header_cv_tau <- paste0("CV", "\u03c4", "(0.05)")
+  
+  flextable(df) %>%
+    # Headers
+    set_header_labels(
+      Variable = "Variable",
+      Model = "Model",
+      Phi = header_phi,
+      CV_Phi = header_cv_phi,
+      Decision = "Decision",
+      Tau = header_tau,
+      CV_Tau = header_cv_tau,
+      Conclusion = "Conclusion"
+    ) %>%
+    
+    # Fonts & Alignment
+    font(fontname = "Times New Roman", part = "all") %>%
+    fontsize(size = 12, part = "all") %>%
+    bold(part = "header") %>%
+    align(align = "center", part = "all") %>% 
+    
+    # Borders
+    autofit() %>%
+    border_remove() %>%
+    hline_top(part = "header", border = fp_border(width = 1.5)) %>%
+    hline_bottom(part = "header", border = fp_border(width = 1)) %>%
+    hline_bottom(part = "body", border = fp_border(width = 1.5)) %>%
+    
+    # Conditional Grey
+    color(i = ~ Decision == "Drop Trend", j = 1:8, color = "grey70") %>%
+    
+    # Formatting
+    colformat_double(na_str = "", digits = 3) %>%
+    set_caption(caption_text)
+}
+```
+
+2.  Function for creating PP test summary tables
+
+```{r}
+extract_pp_row <- function(country_name, pp_object, model_label) {
+  
+  # 1. Extract Test Statistic
+  stat <- pp_object@teststat
+  
+  # 2. Extract Critical Value
+  cval <- pp_object@cval[1, "5pct"] 
+  
+  data.frame(
+    Country = country_name,
+    Model = model_label,   
+    PP.Stat = stat,
+    CV.5. = cval,
+    stringsAsFactors = FALSE
+  )
+}
+style_pp_table <- function(df, caption_text) {
+  
+  # Step 1: Clean and Prepare Data
+  df_clean <- df %>%
+    dplyr::select(Country, Model, PP.Stat, CV.5.) %>% 
+    mutate(
+      Conclusion = ifelse(PP.Stat > CV.5., "Non-Stationary", "Stationary")
+    ) %>%
+    rename(
+      "PP Stat." = PP.Stat,
+      "CV(0.05)" = CV.5.
+    )
+
+  # Step 2: Create and Format Flextable
+  flextable(df_clean) %>%
+    # 1. Font Styling (Removed fontsize=12 to match ADF table)
+    font(fontname = "Times New Roman", part = "all") %>%
+    
+    # 2. Styling
+    bold(part = "header") %>%
+    align(align = "center", part = "all") %>%
+    
+    # 3. Borders
+    border_remove() %>% 
+    hline_top(part = "header", border = fp_border(width = 1.5)) %>% 
+    hline_bottom(part = "header", border = fp_border(width = 1)) %>% 
+    hline_bottom(part = "body", border = fp_border(width = 1.5)) %>%
+    
+    # 4. Formatting
+    autofit() %>%
+    colformat_double(digits = 3) %>%
+    set_caption(caption_text)
+}
+```
+
+3.  Function for Cointegration Tests
+
+```{r}
+make_coint_table <- function(ts_data, det_type = "const", lag_k = NULL, table_caption = "Cointegration Test Results") {
+  
+  # 1. Lag Selection
+  if (is.null(lag_k)) {
+    lag_selection <- VARselect(ts_data, lag.max = 12, type = det_type)
+    optimal_lag <- lag_selection$selection["AIC(n)"]
+    if (optimal_lag < 2) { optimal_lag <- 2 }
+    message(paste("Auto-selected Lag (AIC):", optimal_lag))
+  } else {
+    optimal_lag <- lag_k
+    message(paste("Using Manual Lag K =", optimal_lag))
+  }
+  
+  # 2. Run Tests
+  j_max <- ca.jo(ts_data, type = "eigen", ecdet = det_type, K = optimal_lag)
+  j_trace <- ca.jo(ts_data, type = "trace", ecdet = det_type, K = optimal_lag)
+  
+  # 3. Build Rows
+  num_vars <- ncol(ts_data)
+  rows_to_show <- 0:(num_vars - 1)
+  
+  get_test_row <- function(obj, r, type) {
+    idx <- num_vars - r 
+    stat <- obj@teststat[idx]
+    crit <- obj@cval[idx, "5pct"] 
+    conc <- ifelse(stat > crit, "Rejected", "Not rejected")
+    
+    if (type == "Max-Eigen") {
+      h0 <- paste0("r = ", r)
+      ha <- paste0("r = ", r + 1)
+    } else {
+      h0 <- ifelse(r == 0, "r = 0", paste0("r \u2264 ", r))
+      ha <- paste0("r > ", r)
+    }
+    return(list(h0=h0, ha=ha, stat=stat, crit=crit, conc=conc))
+  }
+
+  df_max <- do.call(rbind, lapply(rows_to_show, function(r) {
+    res <- get_test_row(j_max, r, "Max-Eigen")
+    data.frame(H0 = res$h0, HA = res$ha, 
+               lambda_max = res$stat, cv_max = res$crit, 
+               lambda_trace = NA, cv_trace = NA, 
+               Conclusion = res$conc, stringsAsFactors = FALSE)
+  }))
+  
+  df_trace <- do.call(rbind, lapply(rows_to_show, function(r) {
+    res <- get_test_row(j_trace, r, "Trace")
+    data.frame(H0 = res$h0, HA = res$ha, 
+               lambda_max = NA, cv_max = NA, 
+               lambda_trace = res$stat, cv_trace = res$crit, 
+               Conclusion = res$conc, stringsAsFactors = FALSE)
+  }))
+  
+  split_row <- nrow(df_max) 
+  
+  results_df <- rbind(df_max, df_trace)
+  
+  # 4. Flextable Styling
+  ft <- flextable(results_df)
+  ft <- set_header_labels(ft, H0="H0", HA="HA", lambda_max="lambda_max", cv_max="CV_max", lambda_trace="lambda_trace", cv_trace="CV_trace", Conclusion="Conclusion")
+  
+  # Math Formatting
+  ft <- compose(ft, part = "header", j = "H0", value = as_paragraph("H", as_sub("0")))
+  ft <- compose(ft, part = "header", j = "HA", value = as_paragraph("H", as_sub("A")))
+  ft <- compose(ft, part = "header", j = "lambda_max", value = as_paragraph("\u03BB", as_sub("Max")))
+  ft <- compose(ft, part = "header", j = "cv_max", value = as_paragraph("CV", as_sub("Max")))
+  ft <- compose(ft, part = "header", j = "lambda_trace", value = as_paragraph("\u03BB", as_sub("Trace")))
+  ft <- compose(ft, part = "header", j = "cv_trace", value = as_paragraph("CV", as_sub("Trace")))
+  
+  ft <- align(ft, align = "center", part = "all")
+  ft <- font(ft, fontname = "Times New Roman", part = "all")
+  ft <- fontsize(ft, size = 12, part = "all")
+  ft <- bold(ft, part = "header")
+  ft <- colformat_double(ft, digits = 3, na_str = "") 
+  
+  # ==== BORDERS ====
+  # Define styles
+  big_border <- fp_border(color = "black", width = 1.5)
+  gray_solid <- fp_border(color = "gray", style = "solid", width = 1) # 
+  
+  # 1. Reset
+  ft <- border_remove(ft)
+  
+  # 2. Main Black Lines
+  ft <- hline_top(ft, border = big_border, part = "header")
+  ft <- hline_bottom(ft, border = big_border, part = "header")
+  ft <- hline_bottom(ft, border = big_border, part = "body")
+  
+  # 3. The Split Line 
+  ft <- hline(ft, i = split_row, border = gray_solid, part = "body")
+
+  ft <- autofit(ft)
+  ft <- set_caption(ft, caption = table_caption)
+  
+  return(ft)
+}
+```
+
+## 1. Stationary Test of Real Exchange Rate for HK, CN, JP
+
+### 1.1 Visualisation of Monthly RER from 2004-2024
+
+```{r}
+# CN & HK
+plot(Date, cn_rer, type = "l", col = "red", ylim = c(1.8, 2.6),
+     main = "China and Hong Kong", ylab = "Real Exchange Rate", xlab = "")
+lines(Date, hk_rer, col = "blue")
+legend("topright", legend = c("Chinese RMB/US $", "Hong Kong $/US $"),
+       col = c("red", "blue"), lty = 1)
+
+```
+
+```{r}
+# JP
+plot(Date, jp_rer, type = "l", col = "black", ylim = c(4.4, 5.4),
+     main = "Japan", ylab = "Real Exchange Rate", xlab = "")
+text(Date[100], 4.8, "Yen/US $")  
+```
+
+### 1.2 ADF Tests (trend and drift) of Monthly RER from 2004-2024
+
+1.  Run ADF Tests (trend and drift) tests for each country
+
+```{r}
+# ==== CN ADF test for Real Exchange Rate ====
+# trend
+cn_adf_with_trend <- ur.df(data$cn_rer, type = "trend", selectlags = "AIC")
+
+# drift
+cn_adf_with_drift <- ur.df(data$cn_rer, type = "drift", selectlags = "AIC")
+```
+
+```{r}
+# ==== HK ADF test for Real Exchange Rate ====
+# trend
+hk_adf_with_trend <- ur.df(data$hk_rer, type = "trend", selectlags = "AIC")
+
+# drift
+hk_adf_with_drift <- ur.df(data$hk_rer, type = "drift", selectlags = "AIC")
+```
+
+```{r}
+# ==== JP ADF test for Real Exchange Rate ====
+# trend
+jp_adf_with_trend <- ur.df(data$jp_rer, type = "trend", selectlags = "AIC")
+
+# drift
+jp_adf_with_drift <- ur.df(data$jp_rer, type = "drift", selectlags = "AIC")
+```
+
+2.  ADF Tests Summary of Real Exchange Rate in CN, HK, JP
+
+```{r}
+# 1. Run the function for each variable (extracts Phi 2 data)
+cn_rer_adf_rows <- get_adf_diagnostics("CN", cn_adf_with_trend, cn_adf_with_drift)
+hk_rer_adf_rows <- get_adf_diagnostics("HK", hk_adf_with_trend, hk_adf_with_drift)
+jp_rer_adf_rows <- get_adf_diagnostics("JP", jp_adf_with_trend, jp_adf_with_drift)
+
+# 2. Combine into one big summary table
+rer_adf_table <- rbind(cn_rer_adf_rows, hk_rer_adf_rows, jp_rer_adf_rows)
+
+# 3. CREATE THE FINAL FORMATTED TABLE
+rer_adf_table <- style_adf_table(rer_adf_table, "Table 1. ADF Test Results of Real Exchange Rates in CN, HK, and JP")
+
+rer_adf_table
+```
+
+### 1.3 ADF PP tests of Monthly RER from 2004-2024
+
+1.  Run PP Tests tests for each country (the decision of model is based on visualisation and phi_value from previous ADF tests)
+
+```{r}
+# Conduct PP test for CN HK JP
+cn_pp_rer <- ur.pp(data$cn_rer, type = "Z-tau", model = "constant", lags = "short")
+hk_pp_rer <- ur.pp(data$hk_rer, type = "Z-tau", model = "constant", lags = "short")
+jp_pp_rer <- ur.pp(data$jp_rer, type = "Z-tau", model = "constant", lags = "short")
+```
+
+2.  PP Tests Summary of Real Exchange Rate in CN, HK, JP
+
+```{r}
+# Extract data for each country
+cn_rer_pp_row <- extract_pp_row("CN", cn_pp_rer, "Constant")
+hk_rer_pp_row <- extract_pp_row("HK", hk_pp_rer, "Constant")
+jp_rer_pp_row <- extract_pp_row("JP", jp_pp_rer, "Constant")
+
+# Combine into one table
+pp_table <- rbind(cn_rer_pp_row, hk_rer_pp_row, jp_rer_pp_row)
+
+# Generate the final Word-ready table
+ft_pp <- style_pp_table(pp_table, "Table 2. PP Test Results of Real Exchange Rates in CN, HK, and JP")
+
+# Print
+ft_pp
+```
+
+## 2. Cointegration Tests Across HK, CN, JP
+
+### 2.1 G-PPP Tests Across Hong Kong, China and the United States (Base Country)
+
+```{r}
+rer_ts_hkcn <- ts(data[, c("hk_rer", "cn_rer")], start = c(2004, 1), frequency = 12)
+
+table_gppp_hkcn <- make_coint_table(rer_ts_hkcn, 
+                               det_type = "const", 
+                               table_caption = "Table 9. G-PPP Tests Across Hong Kong, China and the United States (Base Country)")
+table_gppp_hkcn
+```
+
+### 2.2 Cointegration Tests of Real Exchange Rate for Hong Kong and Japan (vs US)
+
+```{r}
+rer_ts_hkjp <- ts(data[, c("hk_rer", "jp_rer")], start = c(2004, 1), frequency = 12)
+
+table_gppp_hkjp <- make_coint_table(rer_ts_hkjp, 
+                               det_type = "const", 
+                               table_caption = "Table 10. Cointegration Tests of Real Exchange Rate for Hong Kong and Japan (vs US) ")
+table_gppp_hkjp
+```
+
+### 2.3 Cointegration Tests of Real Exchange Rate for China and Japan (vs US)
+
+```{r}
+rer_ts_cnjp <- ts(data[, c("cn_rer", "jp_rer")], start = c(2004, 1), frequency = 12)
+
+table_gppp_cnjp <- make_coint_table(rer_ts_cnjp, 
+                               det_type = "const", 
+                               table_caption = "Table 11. Cointegration Tests of Real Exchange Rate for China and Japan (vs US) ")
+table_gppp_cnjp
+```
+
+### 2.4 G-PPP Tests Across China, Hong Kong , Japan (vs US)
+
+```{r}
+rer_ts_cnhkjp <- ts(data[, c("cn_rer","hk_rer", "jp_rer")], start = c(2004, 1), frequency = 12)
+
+table_gppp_cnhkjp <- make_coint_table(rer_ts_cnhkjp, 
+                               det_type = "const", 
+                               table_caption = "Table 12. G-PPP Tests Across China, Hong Kong, Japan (vs US)  ")
+table_gppp_cnhkjp
+```
+
+## 3. Stationary and Cointegration Tests of Inner Economies (HK)
+
+### 3.1 Visualisation of HK Monthly GDP per Capita, FX Reserves, and Real Interest from 2004-2024
+
+```{r}
+# Adjust margins: Bottom=4, Left=4, Top=2, Right=1
+par(mfrow = c(2, 2), mar = c(4, 4, 2, 1))
+
+# GDP per capita
+plot(Date, hk_gdp, type = "l", col = "black", 
+     main = "Hong Kong: GDP per capita", 
+     ylab = "GDP (log)", xlab = "Year")
+
+# FX Reserves
+plot(Date, hk_fr, type = "l", col = "black", 
+     main = "Hong Kong: FX Reserves", 
+     ylab = "Reserves (log)", xlab = "Year")
+
+# Real Interest Rate
+plot(Date, hk_rir, type = "l", col = "black", 
+     main = "Hong Kong: Real Interest Rate", 
+     ylab = "Rate", xlab = "Year")
+
+par(mfrow = c(1, 1)) 
+```
+
+### 3.2 ADF Tests Summary of HK Macroeconomic Fundamentals
+
+1.  Run trend and drift tests for each variables
+
+```{r}
+# === HK GDP ===
+# trend
+hk_gdp_trend <- ur.df(data$hk_gdp, type = "trend", selectlags = "AIC")
+
+# drift
+hk_gdp_drift <- ur.df(data$hk_gdp, type = "drift", selectlags = "AIC")
+```
+
+```{r}
+# === HK Foreign Reserves (FR) ===
+# trend
+hk_fr_trend  <- ur.df(data$hk_fr, type = "trend", selectlags = "AIC")
+
+# drift
+hk_fr_drift  <- ur.df(data$hk_fr, type = "drift", selectlags = "AIC")
+```
+
+```{r}
+# === HK Real Interest Rate (RIR) ===
+# trend
+hk_rir_trend <- ur.df(data$hk_rir, type = "trend", selectlags = "AIC")
+
+# drift
+hk_rir_drift <- ur.df(data$hk_rir, type = "drift", selectlags = "AIC")
+```
+
+2.  Table of ADF Tests HK Macroeconomic Fundamentals
+
+```{r}
+# 1. Run the function for each variable (extracts Phi 2 data)
+hk_gdp_adf_rows <- get_adf_diagnostics("HK_GDP", hk_gdp_trend, hk_gdp_drift)
+hk_fr_adf_rows  <- get_adf_diagnostics("HK_FR",  hk_fr_trend,  hk_fr_drift)
+hk_rir_adf_rows <- get_adf_diagnostics("HK_RIR", hk_rir_trend, hk_rir_drift)
+
+# 2. Combine into one big summary table
+hk_adf_macro_table <- rbind(hk_gdp_adf_rows, hk_fr_adf_rows, hk_rir_adf_rows)
+
+# 3. CREATE THE FINAL FORMATTED TABLE
+ft_hk_adf <- style_adf_table(hk_adf_macro_table, "Table 3. ADF Test Results of Hong Kong Macroeconomic Variables")
+
+ft_hk_adf
+```
+
+### 3.3. PP Tests Summary of HK Macroeconomic Fundamentals
+
+1.  Run PP tests for each variable
+
+```{r}
+# Run PP test with model = "constant" for each HK macro variable
+hk_pp_gdp  <- ur.pp(data$hk_gdp,  type = "Z-tau", model = "trend", lags = "short")
+hk_pp_fr   <- ur.pp(data$hk_fr,   type = "Z-tau", model = "trend", lags = "short")
+hk_pp_rir  <- ur.pp(data$hk_rir,  type = "Z-tau", model = "constant", lags = "short")
+```
+
+2.  Table of PP Test HK Macroeconomic Fundamentals
+
+```{r}
+# Extract data for each country
+hk_gdp_pp_row <- extract_pp_row("HK_GDP", hk_pp_gdp, "Trend")
+hk_fr_pp_row <- extract_pp_row("HK_FR", hk_pp_fr, "Trend")
+hk_rir_pp_row <- extract_pp_row("HK_RIR", hk_pp_rir, "Constant")
+
+# Combine into one table
+hk_pp_table <- rbind(hk_gdp_pp_row, hk_fr_pp_row, hk_rir_pp_row)
+
+# Generate the final Word-ready table
+ft_pp_hk <- style_pp_table(hk_pp_table, "Table 4. PP Test Results of Hong Kong Macroeconomic Variables")
+
+# Print
+ft_pp_hk
+```
+
+### 3.4 Johansen Cointegration Test Results of HK
+
+```{r}
+hk_ts <- ts(data[, c("hk_rer", "hk_gdp","hk_fr", "hk_rir")], start = c(2004, 1), frequency = 12)
+
+table_coint_hk <- make_coint_table(hk_ts, 
+                               det_type = "trend", 
+                               table_caption = "Table 12. Johansen Cointegration Test Results of Hong Kong")
+table_coint_hk
+```
+
+## 4. Stationary and Cointegration Tests of Inner Economies (China)
+
+### 4.1 Visualisation of CN Monthly GDP per Capita, FX Reserves, and Real Interest from 2004-2024
+
+```{r}
+# Adjust margins: Bottom=4, Left=4, Top=2, Right=1
+par(mfrow = c(2, 2), mar = c(4, 4, 2, 1))
+
+# GDP per capita
+plot(Date, cn_gdp, type = "l", col = "black", 
+     main = "China: GDP per capita", 
+     ylab = "GDP (log)", xlab = "Year")
+
+# FX Reserves
+plot(Date, cn_fr, type = "l", col = "black", 
+     main = "China: FX Reserves", 
+     ylab = "Reserves (log)", xlab = "Year")
+
+# Real Interest Rate
+plot(Date, cn_rir, type = "l", col = "black", 
+     main = "China: Real Interest Rate", 
+     ylab = "Rate", xlab = "Year")
+
+par(mfrow = c(1, 1)) 
+```
+
+### 4.2 ADF Tests Summary of CN Macroeconomic Fundamentals
+
+1.  Run trend and drift tests for each variables
+
+```{r}
+# === CN GDP ===
+# trend
+cn_gdp_trend <- ur.df(data$cn_gdp, type = "trend", selectlags = "AIC")
+
+# drift
+cn_gdp_drift <- ur.df(data$cn_gdp, type = "drift", selectlags = "AIC")
+```
+
+```{r}
+# === CN Foreign Reserves (FR) ===
+# trend
+cn_fr_trend  <- ur.df(data$cn_fr, type = "trend", selectlags = "AIC")
+
+# drift
+cn_fr_drift  <- ur.df(data$cn_fr, type = "drift", selectlags = "AIC")
+```
+
+```{r}
+# === CN Real Interest Rate (RIR) ===
+# trend
+cn_rir_trend <- ur.df(data$cn_rir, type = "trend", selectlags = "AIC")
+
+# drift
+cn_rir_drift <- ur.df(data$cn_rir, type = "drift", selectlags = "AIC")
+```
+
+2.  Table of ADF Test CN Macroeconomic Fundamentals
+
+```{r}
+# 1. Run the function for each variable (extracts Phi 2 data)
+cn_gdp_adf_rows <- get_adf_diagnostics("CN_GDP", cn_gdp_trend, cn_gdp_drift)
+cn_fr_adf_rows  <- get_adf_diagnostics("CN_FR",  cn_fr_trend,  cn_fr_drift)
+cn_rir_adf_rows <- get_adf_diagnostics("CN_RIR", cn_rir_trend, cn_rir_drift)
+
+# 2. Combine into one big summary table
+cn_adf_macro_table <- rbind(cn_gdp_adf_rows, cn_fr_adf_rows, cn_rir_adf_rows)
+
+# 3. CREATE THE FINAL FORMATTED TABLE
+ft_cn_adf <- style_adf_table(cn_adf_macro_table, "Table 5. ADF Test Results for China Macroeconomic Variables")
+
+ft_cn_adf
+```
+
+### 4.3. PP Tests Summary of CN Macroeconomic Fundamentals
+
+1.  Run PP tests for each variable
+
+```{r}
+# Run PP test with model = "constant" for each CN macro variable
+cn_pp_gdp  <- ur.pp(data$cn_gdp,  type = "Z-tau", model = "trend", lags = "short")
+cn_pp_fr   <- ur.pp(data$cn_fr,   type = "Z-tau", model = "trend", lags = "short")
+cn_pp_rir  <- ur.pp(data$cn_rir,  type = "Z-tau", model = "trend", lags = "short")
+```
+
+2.  Table of PP Test JP Macroeconomic Fundamentals
+
+```{r}
+# Extract data for each country
+cn_gdp_pp_row <- extract_pp_row("CN_GDP", cn_pp_gdp, "Trend")
+cn_fr_pp_row <- extract_pp_row("CN_FR", cn_pp_fr, "Trend")
+cn_rir_pp_row <- extract_pp_row("CN_RIR", cn_pp_rir, "Trend")
+
+# Combine into one table
+cn_pp_table <- rbind(cn_gdp_pp_row, cn_fr_pp_row, cn_rir_pp_row)
+
+# Generate the final Word-ready table
+ft_pp_cn <- style_pp_table(cn_pp_table, "Table 6. PP Test Results of China Macroeconomic Variables")
+
+# Print
+ft_pp_cn
+```
+
+### 4.4 Johansen Cointegration Test Results of CN
+
+```{r}
+cn_ts <- ts(data[, c("cn_rer","cn_gdp","cn_fr","cn_rir")], start = c(2004, 1), frequency = 12)
+
+table_coint_cn <- make_coint_table(cn_ts, 
+                               det_type = "trend", 
+                               table_caption = "Table 14. Johansen Cointegration Test Results of China")
+table_coint_cn
+```
+
+## 5. Stationary and Cointegration Tests of Inner Economies (Japan)
+
+### 5.1 Visualisation of JP Monthly GDP per Capita, FX Reserves, and Real Interest from 2004-2024
+
+```{r}
+# Adjust margins: Bottom=4, Left=4, Top=2, Right=1
+par(mfrow = c(2, 2), mar = c(4, 4, 2, 1))
+
+# GDP per capita
+plot(Date, jp_gdp, type = "l", col = "black", 
+     main = "Japan: GDP per capita", 
+     ylab = "GDP (log)", xlab = "Year")
+
+# FX Reserves
+plot(Date, jp_fr, type = "l", col = "black", 
+     main = "Japan: FX Reserves", 
+     ylab = "Reserves (log)", xlab = "Year")
+
+# Real Interest Rate
+plot(Date, jp_rir, type = "l", col = "black", 
+     main = "Japan: Real Interest Rate", 
+     ylab = "Rate", xlab = "Year")
+
+par(mfrow = c(1, 1)) 
+```
+
+### 5.2 ADF Tests Summary of JP Macroeconomic Fundamentals
+
+1.  Run trend and drift tests for each variables
+
+```{r}
+# === JP GDP ===
+# trend
+jp_gdp_trend <- ur.df(data$jp_gdp, type = "trend", selectlags = "AIC")
+
+# drift
+jp_gdp_drift <- ur.df(data$jp_gdp, type = "drift", selectlags = "AIC")
+```
+
+```{r}
+# === JP Foreign Reserves (FR) ===
+# trend
+jp_fr_trend  <- ur.df(data$jp_fr, type = "trend", selectlags = "AIC")
+
+# drift
+jp_fr_drift  <- ur.df(data$jp_fr, type = "drift", selectlags = "AIC")
+```
+
+```{r}
+# === JP Real Interest Rate (RIR) ===
+# trend
+jp_rir_trend <- ur.df(data$jp_rir, type = "trend", selectlags = "AIC")
+
+# drift
+jp_rir_drift <- ur.df(data$jp_rir, type = "drift", selectlags = "AIC")
+```
+
+2.  Table of ADF Test CN Macroeconomic Fundamentals
+
+```{r}
+# 1. Run the function for each variable (extracts Phi 2 data)
+jp_gdp_adf_rows <- get_adf_diagnostics("JP_GDP", jp_gdp_trend, jp_gdp_drift)
+jp_fr_adf_rows  <- get_adf_diagnostics("JP_FR",  jp_fr_trend,  jp_fr_drift)
+jp_rir_adf_rows <- get_adf_diagnostics("JP_RIR", jp_rir_trend, jp_rir_drift)
+
+# 2. Combine into one big summary table
+jp_adf_macro_table <- rbind(jp_gdp_adf_rows, jp_fr_adf_rows, jp_rir_adf_rows)
+
+# 3. CREATE THE FINAL FORMATTED TABLE
+ft_jp_adf <- style_adf_table(jp_adf_macro_table, "Table 7. ADF Test Results for Japan Macroeconomic Variables")
+
+ft_jp_adf
+```
+
+### 5.3 PP Tests Summary of JP Macroeconomic Fundamentals
+
+1.  Run PP tests for each variable
+
+```{r}
+# Run PP test with model = "constant" for each JP macro variable
+jp_pp_gdp  <- ur.pp(data$jp_gdp,  type = "Z-tau", model = "trend", lags = "short")
+jp_pp_fr   <- ur.pp(data$jp_fr,   type = "Z-tau", model = "constant", lags = "short")
+jp_pp_rir  <- ur.pp(data$jp_rir,  type = "Z-tau", model = "constant", lags = "short")
+```
+
+2.  Table of PP Test CN Macroeconomic Fundamentals
+
+```{r}
+# Extract data for each country
+jp_gdp_row <- extract_pp_row("JP_GDP", jp_pp_gdp, "Trend")
+jp_fr_row <- extract_pp_row("JP_FR", jp_pp_fr, "Constant")
+jp_rir_row <- extract_pp_row("JP_RIR", jp_pp_rir, "Constant")
+
+# Combine into one table
+jp_pp_table <- rbind(jp_gdp_row, jp_fr_row, jp_rir_row)
+
+# Generate the final Word-ready table
+ft_pp_jp <- style_pp_table(jp_pp_table, "Table 8. PP Test Results for Japan Macroeconomic Variables")
+
+# Print
+ft_pp_jp
+```
+
+##5.4 Johansen Cointegration Test Results of Japan
+
+```{r}
+jp_ts <- ts(data[, c("jp_rer","jp_gdp","jp_fr", "jp_rir")], start = c(2004, 1), frequency = 12)
+
+table_coint_jp <- make_coint_table(jp_ts, 
+                               det_type = "trend", 
+                               table_caption = "Table 15. Johansen Cointegration Test Results of Japan")
+table_coint_jp
+```

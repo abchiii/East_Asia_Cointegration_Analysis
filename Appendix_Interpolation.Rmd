@@ -1,0 +1,280 @@
+---
+title: "Appendix-Interpolation"
+output: github_document
+date: "2026-01-20"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(writexl)
+library(tempdisagg)
+library(tsbox) 
+library(readxl)
+
+# Attach data yearly data 
+yearly_data <- read_excel("/Users/chingting/Desktop/research_revision copy/yearly_data.xlsx") 
+yearly_data$Date <- as.Date(yearly_data$...1)
+attach(yearly_data)
+
+# Create 'df' by copying your real dataset into it
+df <- yearly_data
+colnames(df)[1] <- "Date"
+df$Date <- as.Date(df$Date)
+
+# Extract the unique annual values (Taking the value from January of each year)
+annual_gdp_values <- df$cn_gdp[seq(1, nrow(df), by = 12)]
+annual_rir_values <- df$cn_rir[seq(1, nrow(df), by = 12)]
+annual_fr_values <- df$cn_fr[seq(1, nrow(df), by = 12)]
+annual_usfr_values <- df$us_fr[seq(1, nrow(df), by = 12)]
+annual_usgdp_values <- df$us_gdp[seq(1, nrow(df), by = 12)]
+annual_hkgdp_values <- df$hk_gdp[seq(1, nrow(df), by = 12)]
+annual_jpgdp_values <- df$jp_gdp[seq(1, nrow(df), by = 12)]
+
+# Convert to Time Series (ts) objects
+annual_gdp_ts <- ts(annual_gdp_values, start = 2004, frequency = 1)
+annual_rir_ts <- ts(annual_rir_values, start = 2004, frequency = 1)
+annual_fr_ts <- ts(annual_fr_values, start = 2004, frequency = 1)
+annual_usfr_ts <- ts(annual_usfr_values, start = 2004, frequency = 1)
+annual_usgdp_ts <- ts(annual_usgdp_values, start = 2004, frequency = 1)
+annual_hkgdp_ts <- ts(annual_hkgdp_values, start = 2004, frequency = 1)
+annual_jpgdp_ts <- ts(annual_jpgdp_values, start = 2004, frequency = 1)
+```
+### China GDP
+```{r}
+# Interpolate CN GDP
+model_gdp <- td(annual_gdp_ts ~ 1, conversion = "average", to = "monthly", method = "denton-cholette")
+monthly_gdp_smooth <- predict(model_gdp)
+
+df$cn_gdp_smooth <- as.numeric(monthly_gdp_smooth) 
+```
+
+
+```{r}
+# Comparison Plot between Step (Repeating yearly data 12 times) and Smooth data (Interpolated data)
+plot(df$Date, df$cn_gdp, type="l", col="red", main="China GDP Comparison: Step vs Smooth")
+lines(df$Date, df$cn_gdp_smooth, col="blue", lwd=2)
+legend("topleft", legend=c("Old (Step)", "New (Smooth)"), col=c("red", "blue"), lty=1)
+```
+
+```{r}
+# Plot GDP
+plot(df$Date, df$cn_gdp_smooth, 
+     type = "l",            # "l" for line (smooth)
+     col  = "black",        # Match your screenshot's color
+     lwd  = 1.5,            # Line width (1 is standard, 1.5 is slightly clearer)
+     
+     # Labels & Titles
+     main = "China GDP per capita",  # The exact title from your screenshot
+     ylab = "GDP (log)",              # The exact Y-axis label
+     xlab = "Year",                   # The exact X-axis label
+     
+     # Font styling (optional, to match R's default bold title)
+     font.main = 2
+)
+```
+### China Real Interest Rate
+```{r}
+# Interpolate CN Real Interest Rate
+model_rir <- td(annual_rir_ts ~ 1, conversion = "average", to = "monthly", method = "denton-cholette")
+monthly_rir_smooth <- predict(model_rir)
+
+df$cn_rir_smooth <- as.numeric(monthly_rir_smooth) 
+```
+
+```{r}
+# Comparison Plot between Step and Smooth data
+plot(df$Date, df$cn_rir, type="l", col="red", main="China Real Interest Rate Comparison: Step vs Smooth")
+lines(df$Date, df$cn_rir_smooth, col="blue", lwd=2)
+legend("topleft", legend=c("Old (Step)", "New (Smooth)"), col=c("red", "blue"), lty=1)
+```
+
+```{r}
+# Plot CN RIR
+plot(df$Date, df$cn_rir_smooth, 
+     type = "l",            # "l" for line (smooth)
+     col  = "black",        # Match your screenshot's color
+     lwd  = 1.5,            # Line width (1 is standard, 1.5 is slightly clearer)
+     
+     # Labels & Titles
+     main = "Interpolated China Real Interest Rate",  # The exact title from your screenshot
+     ylab = "Rate",              # The exact Y-axis label
+     xlab = "Year",                   # The exact X-axis label
+     
+     # Font styling (optional, to match R's default bold title)
+     font.main = 2
+)
+```
+
+### China Foreign Reserves
+```{r}
+# Interpolate CN Foreign Exchange Rate
+model_fr <- td(annual_fr_ts ~ 1, conversion = "average", to = "monthly", method = "denton-cholette")
+monthly_fr_smooth <- predict(model_fr)
+
+df$cn_fr_smooth <- as.numeric(monthly_fr_smooth) 
+```
+
+```{r}
+# Comparison Plot between Step and Smooth data
+plot(df$Date, df$cn_fr, type="l", col="red", main="China Foreign Reserves Comparison: Step vs Smooth")
+lines(df$Date, df$cn_fr_smooth, col="blue", lwd=2)
+legend("topleft", legend=c("Old (Step)", "New (Smooth)"), col=c("red", "blue"), lty=1)
+```
+
+```{r}
+# Plot the CN FX
+plot(df$Date, df$cn_fr_smooth, 
+     type = "l",            # "l" for line (smooth)
+     col  = "black",        # Match your screenshot's color
+     lwd  = 1.5,            # Line width (1 is standard, 1.5 is slightly clearer)
+     
+     # Labels & Titles
+     main = "Interpolated China Foreign Reserves",  # The exact title from your screenshot
+     ylab = "Reserves (log)",              # The exact Y-axis label
+     xlab = "Year",                   # The exact X-axis label
+     
+     # Font styling (optional, to match R's default bold title)
+     font.main = 2
+)
+```
+### US Foreign Reserves
+```{r}
+# Interpolate US Foreign Exchange Rate
+# "denton-cholette" is the standard method for smoothing without an indicator
+model_usfr <- td(annual_usfr_ts ~ 1, conversion = "average", to = "monthly", method = "denton-cholette")
+monthly_usfr_smooth <- predict(model_usfr)
+
+df$us_fr_smooth <- as.numeric(monthly_usfr_smooth) 
+```
+
+```{r}
+# Comparison Plot between Step and Smooth data
+plot(df$Date, df$us_fr, type="l", col="red", main="US Foreign Reserves Comparison: Step vs Smooth")
+lines(df$Date, df$us_fr_smooth, col="blue", lwd=2)
+legend("topleft", legend=c("Old (Step)", "New (Smooth)"), col=c("red", "blue"), lty=1)
+```
+
+```{r}
+# Plot US FX
+plot(df$Date, df$us_fr_smooth, 
+     type = "l",            # "l" for line (smooth)
+     col  = "black",        # Match your screenshot's color
+     lwd  = 1.5,            # Line width (1 is standard, 1.5 is slightly clearer)
+     
+     # Labels & Titles
+     main = "Interpolated US Foreign Reserves",  # The exact title from your screenshot
+     ylab = "Reserves",              # The exact Y-axis label
+     xlab = "Year",                   # The exact X-axis label
+     
+     # Font styling (optional, to match R's default bold title)
+     font.main = 2
+)
+
+```
+### US GDP
+```{r}
+# Interpolate US GDP
+model_usgdp <- td(annual_usgdp_ts ~ 1, conversion = "average", to = "monthly", method = "denton-cholette")
+monthly_usgdp_smooth <- predict(model_usgdp)
+
+df$us_gdp_smooth <- as.numeric(monthly_usgdp_smooth) 
+```
+
+```{r}
+# Comparison Plot between Step and Smooth data
+plot(df$Date, df$us_gdp, type="l", col="red", main="US GDP Comparison: Step vs Smooth")
+lines(df$Date, df$us_gdp_smooth, col="blue", lwd=2)
+legend("topleft", legend=c("Old (Step)", "New (Smooth)"), col=c("red", "blue"), lty=1)
+```
+
+```{r}
+# Plot US GDP
+plot(df$Date, df$us_gdp_smooth, 
+     type = "l",            # "l" for line (smooth)
+     col  = "black",        # Match your screenshot's color
+     lwd  = 1.5,            # Line width (1 is standard, 1.5 is slightly clearer)
+     
+     # Labels & Titles
+     main = "Interpolated US GDP per capita",  # The exact title from your screenshot
+     ylab = "GDP(log)",              # The exact Y-axis label
+     xlab = "Year",                   # The exact X-axis label
+     
+     # Font styling (optional, to match R's default bold title)
+     font.main = 2
+)
+```
+### HK GDP
+```{r}
+# Interpolate HK GDP
+model_hkgdp <- td(annual_hkgdp_ts ~ 1, conversion = "average", to = "monthly", method = "denton-cholette")
+monthly_hkgdp_smooth <- predict(model_hkgdp)
+
+df$hk_gdp_smooth <- as.numeric(monthly_hkgdp_smooth) 
+```
+
+```{r}
+# Comparison Plot between Step and Smooth data
+plot(df$Date, df$hk_gdp, type="l", col="red", main="Hong Kong GDP Comparison: Step vs Smooth")
+lines(df$Date, df$hk_gdp_smooth, col="blue", lwd=2)
+legend("topleft", legend=c("Old (Step)", "New (Smooth)"), col=c("red", "blue"), lty=1)
+```
+
+```{r}
+# Plot HK GDP
+plot(df$Date, df$hk_gdp_smooth, 
+     type = "l",            # "l" for line (smooth)
+     col  = "black",        # Match your screenshot's color
+     lwd  = 1.5,            # Line width (1 is standard, 1.5 is slightly clearer)
+     
+     # Labels & Titles
+     main = "Interpolated Hong Kong GDP per capita",  # The exact title from your screenshot
+     ylab = "GDP(log)",              # The exact Y-axis label
+     xlab = "Year",                   # The exact X-axis label
+     
+     # Font styling (optional, to match R's default bold title)
+     font.main = 2
+)
+```
+### Japan GDP
+```{r}
+# Interpolate JP GDP 
+model_jpgdp <- td(annual_jpgdp_ts ~ 1, conversion = "average", to = "monthly", method = "denton-cholette")
+monthly_jpgdp_smooth <- predict(model_jpgdp)
+
+df$jp_gdp_smooth <- as.numeric(monthly_jpgdp_smooth) 
+```
+
+```{r}
+# Comparison Plot between Step and Smooth data
+plot(df$Date, df$jp_gdp, type="l", col="red", main="JP GDP Comparison: Step vs Smooth")
+lines(df$Date, df$jp_gdp_smooth, col="blue", lwd=2)
+legend("topleft", legend=c("Old (Step)", "New (Smooth)"), col=c("red", "blue"), lty=1)
+```
+
+```{r}
+# Plot JP GDP
+plot(df$Date, df$jp_gdp_smooth, 
+     type = "l",            # "l" for line (smooth)
+     col  = "black",        # Match your screenshot's color
+     lwd  = 1.5,            # Line width (1 is standard, 1.5 is slightly clearer)
+     
+     # Labels & Titles
+     main = "Interpolated Japan GDP per capita",  # The exact title from your screenshot
+     ylab = "GDP(log)",              # The exact Y-axis label
+     xlab = "Year",                   # The exact X-axis label
+     
+     # Font styling (optional, to match R's default bold title)
+     font.main = 2
+)
+```
+
+```{r}
+# Export the dataframe to an Excel file
+write.csv(df, "interpolated_data.csv")
+
+getwd()
+```
+
