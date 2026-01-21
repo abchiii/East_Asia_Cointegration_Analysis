@@ -18,7 +18,6 @@ library(writexl)
 library(tempdisagg)
 library(tsbox) 
 library(readxl)
-library(ggplot2)
 library(dplyr)
 library(knitr)
 library(urca)
@@ -31,8 +30,8 @@ library(officer)
 
 ```{r load-data, include=FALSE}
 # Convert Date columns and attach data sets for direct variable access
-interpolated_data <- read_excel("/Users/chingting/Desktop/research_revision copy/interpolated_data.xlsx") 
-data <- read_excel("/Users/chingting/Desktop/research_revision copy/data.xlsx", sheet = 2)
+interpolated_data <- read_excel("interpolated_data.xlsx")
+data <- read_excel("data.xlsx", sheet = 2)
 interpolated_data$Date <- as.Date(interpolated_data$Date...9)
 data$Date <- as.Date(data$...1)
 

@@ -9,14 +9,12 @@ knitr::opts_chunk$set(echo = TRUE)
 ```
 
 ```{r}
-library(writexl)
-library(tempdisagg)
-library(tsbox) 
 library(readxl)
+library(writexl)
 
 # Attach data yearly data 
-yearly_data <- read_excel("/Users/chingting/Desktop/research_revision copy/yearly_data.xlsx") 
-yearly_data$Date <- as.Date(yearly_data$...1)
+yearly_data <- read_excel("interpolated_data.xlsx")
+yearly_data$Date <- as.Date(yearly_data$Date...1)
 attach(yearly_data)
 
 # Create 'df' by copying your real dataset into it
@@ -273,8 +271,6 @@ plot(df$Date, df$jp_gdp_smooth,
 
 ```{r}
 # Export the dataframe to an Excel file
-write.csv(df, "interpolated_data.csv")
-
-getwd()
+write_xlsx(df, "interpolated_data.xlsx")
 ```
 
