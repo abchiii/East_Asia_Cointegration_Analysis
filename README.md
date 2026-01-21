@@ -1,4 +1,4 @@
-# East Asia Real Exchange Rate Cointegration Analysis
+# Cointegration Analysis of Real Exchange Rates in East Asia
 
 **Author:** Ching-Ting Huang (Collaborated with 4 team members)  
 
