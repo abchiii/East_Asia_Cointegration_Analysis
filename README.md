@@ -1,12 +1,13 @@
 # East Asia Real Exchange Rate Cointegration Analysis
 
-**Author:** Ching-Ting Huang (Collaborated with 4 team members)
+**Author:** Ching-Ting Huang (Collaborated with 4 team members)  
+
 **Course:** ECON90010 Quantitative Analysis of Finance II, University of Melbourne
 
 ## 📌 Project Overview
-This project investigates the validity of the **Generalized Purchasing Power Parity (G-PPP)** hypothesis across East Asian economies (Mainland China, Hong Kong SAR, and Japan) relative to the United States. 
+This project investigates the validity of the **Generalised Purchasing Power Parity (G-PPP)** hypothesis across East Asian economies (Mainland China, Hong Kong SAR, and Japan) relative to the United States. 
 
-Using monthly macroeconomic data from **2004 to 2024**, we analyze whether these economies form an "Optimum Currency Area" and whether their Real Exchange Rates (RER) share a stable long-run equilibrium. The study also extends previous work by Liang (1999) to determine if modern RER movements are driven by internal macroeconomic fundamentals rather than regional parity.
+Using monthly macroeconomic data from **2004 to 2024**, we analyse whether these economies form an "Optimum Currency Area" and whether their Real Exchange Rates (RER) share a stable long-run equilibrium. The study also extends previous work by Liang (1999) to determine if modern RER movements are driven by internal macroeconomic fundamentals rather than regional parity.
 
 ## 📊 Research Questions
 1. **Regional Integration:** Do China, Hong Kong, and Japan share a long-run cointegration relationship with the US Dollar, supporting the G-PPP hypothesis?
@@ -16,7 +17,7 @@ Using monthly macroeconomic data from **2004 to 2024**, we analyze whether these
 The analysis is conducted in **R** using a rigorous time-series econometric framework:
 
 ### 1. Data Preprocessing
-* **Time Period:** 2015–2024 (Post-Asian Financial Crisis and post-RMB internationalization).
+* **Time Period:** 2004–2024 (Post-Asian Financial Crisis and post-RMB internationalisation).
 * **Interpolation:** Annual data (e.g., GDP per capita) was converted to monthly frequency using the **Denton-Cholette interpolation** method.
 
 ### 2. Statistical Tests
@@ -43,7 +44,7 @@ Our empirical results offer a significant update to historical literature (Liang
 * `urca`: For Unit Root and Cointegration tests.
 * `vars`: For Vector Autoregression and VECM estimation.
 * `tseries`: For additional time-series diagnostics.
-* `tidyverse`: For data manipulation and visualization.
+* `tidyverse`: For data manipulation and visualisation.
 
 ---
 *This project was completed as part of the Master of Applied Econometrics curriculum.*
