@@ -13,7 +13,7 @@ library(readxl)
 library(writexl)
 
 # Attach data yearly data 
-yearly_data <- read_excel("interpolated_data.xlsx")
+yearly_data <- read_excel("data/interpolated_data.xlsx")
 yearly_data$Date <- as.Date(yearly_data$Date...1)
 attach(yearly_data)
 
@@ -267,10 +267,5 @@ plot(df$Date, df$jp_gdp_smooth,
      # Font styling (optional, to match R's default bold title)
      font.main = 2
 )
-```
-
-```{r}
-# Export the dataframe to an Excel file
-write_xlsx(df, "interpolated_data.xlsx")
 ```
 
