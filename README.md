@@ -41,10 +41,9 @@ Our empirical results offer a significant update to historical literature (Liang
 * `East_Asia_RER_Cointegration_Analysis.pdf`: The formal academic report detailing the theoretical framework and literature review.
 
 ## 📦 Libraries Used
-* `urca`: For Unit Root and Cointegration tests.
-* `vars`: For Vector Autoregression and VECM estimation.
-* `tseries`: For additional time-series diagnostics.
-* `tidyverse`: For data manipulation and visualisation.
+* **Econometric Analysis:** `urca` (Cointegration/Unit Root), `vars` (VAR/VECM), `tempdisagg` (Denton-Cholette interpolation).
+* **Time Series & Data Handling:** `tsbox`, `dplyr`, `readxl`, `writexl`.
+* **Reporting:** `flextable`, `knitr`, `officer`.
 
 ---
 *This project was completed as part of the Master of Applied Econometrics curriculum.*
