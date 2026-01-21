@@ -13,7 +13,7 @@ Using monthly macroeconomic data from 2004 to 2024, we analyse whether these eco
 1. **Regional Integration:** Do China, Hong Kong, and Japan share a long-run cointegration relationship with the US Dollar, supporting the G-PPP hypothesis?
 2. **Internal Drivers:** If regional parity does not hold, are RER movements anchored by domestic fundamentals like GDP per capita, Foreign Reserves, and Real Interest Rates?
 
-## 🛠 Methodology
+## Methodology
 The analysis is conducted in **R** using a rigorous time-series econometric framework:
 
 ### 1. Data Preprocessing
@@ -25,7 +25,7 @@ The analysis is conducted in **R** using a rigorous time-series econometric fram
 * **Cointegration Analysis:** The Johansen Cointegration Test (Trace and Max-Eigenvalue statistics) was applied to detect long-run equilibrium vectors.
 * **Lag Selection:** Optimal lag lengths determined via the Akaike Information Criterion (AIC).
 
-## 📉 Key Findings
+## Key Findings
 Our empirical results offer a significant update to historical literature (Liang, 1999):
 
 * **Rejection of G-PPP:** We found no evidence of cointegration across the RERs of China, Hong Kong, and Japan. This suggests that East Asian markets are less monetarily integrated than in the pre-1999 era, likely due to divergent exchange rate regimes (e.g., China's shift to a managed float).
@@ -34,13 +34,13 @@ Our empirical results offer a significant update to historical literature (Liang
     * **China:** 2 cointegrating vectors found.
 * **Economic Implication:** Exchange rates in East Asia are currently driven by internal factors—specifically productivity growth (Balassa-Samuelson effect), foreign reserve accumulation policies, and real interest rate differentials.
 
-## 📂 Repository Structure
+## Repository Structure
 * `East_Asia_RER_Cointegration_Analysis.Rmd`: The main R Markdown file containing the full econometric code and analysis.
 * `Appendix_Interpolation.Rmd`: Supplementary code for converting annual macro data to monthly frequency.
 * `data/`: Folder containing raw and processed datasets (e.g., `data.xlsx`, `annual_data.xlsx`).
 * `East_Asia_RER_Cointegration_Analysis.pdf`: The formal academic report detailing the theoretical framework and literature review.
 
-## 📦 Libraries Used
+## Libraries Used
 * **Econometric Analysis:** `urca` (Cointegration/Unit Root), `vars` (VAR/VECM), `tempdisagg` (Denton-Cholette interpolation).
 * **Time Series & Data Handling:** `tsbox`, `dplyr`, `readxl`, `writexl`.
 * **Reporting:** `flextable`, `knitr`, `officer`.
