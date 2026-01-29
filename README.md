@@ -46,4 +46,4 @@ Our empirical results offer a significant update to historical literature (Liang
 * **Reporting:** `flextable`, `knitr`, `officer`.
 
 ---
-*This project was completed as part of the Master of Applied Econometrics curriculum.*
+*This project was completed as part of the University of Melbourne, Master of Applied Econometrics curriculum.*
